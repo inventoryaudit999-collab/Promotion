@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ระบบแจ้งเตือนป้ายราคาโปรโมชั่น</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --primary:#E4131A; --primary-deep:#B10E14; --gold:#F5A623; --gold-light:#FFD866;
+  --canvas:#F4F5F7; --surface:#ffffff; --ink:#1C1E21; --steel:#5D6C7B; --stone:#8595A4;
+  --hairline:#E3E6EA;
+  --info:#2D8CE0; --info-bg:#EAF3FD;
+  --success:#31A24C; --success-bg:#E9F7ED;
+  --warn:#F5A623; --warn-bg:#FEF3E1;
+  --crit:#E63950; --crit-bg:#FDEAEE;
+  --radius-card:20px; --radius-sm:10px; --radius-pill:100px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --canvas:#15171a; --surface:#1e2126; --ink:#f2f3f4; --steel:#a9b3bd; --stone:#7a8792; --hairline:#30343b;
+    --info-bg:#122437; --success-bg:#0f2417; --warn-bg:#2c2210; --crit-bg:#2c1418;
+  }
+}
+:root[data-theme="dark"]{
+  --canvas:#15171a; --surface:#1e2126; --ink:#f2f3f4; --steel:#a9b3bd; --stone:#7a8792; --hairline:#30343b;
+  --info-bg:#122437; --success-bg:#0f2417; --warn-bg:#2c2210; --crit-bg:#2c1418;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{
+  margin:0; background:var(--canvas); color:var(--ink);
+  font-family:'Noto Sans Thai','Prompt',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.disp{font-family:'Prompt','Noto Sans Thai',sans-serif;}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px 56px;}
+/* header */
+.hero{
+  background:linear-gradient(135deg,var(--primary) 0%,var(--primary-deep) 65%);
+  padding:28px 16px 34px; position:relative; overflow:hidden;
+}
+.hero::after{
+  content:""; position:absolute; right:-60px; top:-60px; width:220px; height:220px;
+  background:radial-gradient(circle,rgba(255,216,102,.35),transparent 70%);
+}
+.hero-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:relative;z-index:1;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand-badge{
+  width:46px;height:46px;border-radius:14px;
+  background:linear-gradient(160deg,var(--gold-light),var(--gold));
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);
+}
+.brand-text .disp{color:#fff;font-size:20px;font-weight:700;margin:0;line-height:1.2;}
+.brand-text .sub{color:rgba(255,255,255,.85);font-size:13px;margin-top:2px;}
+.role-btn{
+  border:1px solid rgba(255,255,255,.5); background:rgba(255,255,255,.12); color:#fff;
+  padding:9px 18px; border-radius:var(--radius-pill); font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; display:flex; align-items:center; gap:6px;
+}
+.role-btn.admin{background:var(--gold);border-color:var(--gold);color:#3a2500;}
+/* alert */
+.alert{
+  margin:-16px 16px 20px; max-width:1068px; margin-left:auto;margin-right:auto;
+  background:#fff; border-left:5px solid var(--crit); border-radius:var(--radius-sm);
+  padding:14px 18px; box-shadow:0 6px 18px rgba(0,0,0,.12); display:flex; gap:12px; align-items:flex-start;
+  position:relative; z-index:2;
+}
+.alert .ic{font-size:22px;}
+.alert b{color:var(--crit);}
+.alert p{margin:2px 0 0;font-size:13.5px;color:var(--steel);}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:22px;}
+.stat{background:var(--surface);border-radius:var(--radius-card);overflow:hidden;border:1px solid var(--hairline);}
+.stat .bar{height:6px;}
+.stat .body{padding:16px 16px 18px;}
+.stat .num{font-size:30px;font-weight:700;font-family:'Prompt',sans-serif;}
+.stat .lbl{font-size:13px;color:var(--steel);margin-top:2px;}
+.stat.total .bar{background:var(--info);} .stat.total .num{color:var(--info);}
+.stat.pending .bar{background:var(--crit);} .stat.pending .num{color:var(--crit);}
+.stat.progress .bar{background:var(--warn);} .stat.progress .num{color:var(--warn);}
+.stat.done .bar{background:var(--success);} .stat.done .num{color:var(--success);}
+/* toolbar */
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:26px 0 14px;flex-wrap:wrap;}
+.filters{display:flex;gap:8px;flex-wrap:wrap;}
+.chip{
+  border:1px solid var(--hairline); background:var(--surface); color:var(--steel);
+  padding:8px 16px;border-radius:var(--radius-pill);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+}
+.chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+.btn-primary{
+  background:var(--primary); color:#fff; border:none; padding:11px 22px; border-radius:var(--radius-pill);
+  font-family:inherit; font-weight:700; font-size:14px; cursor:pointer; display:flex; gap:6px; align-items:center;
+  box-shadow:0 4px 12px rgba(228,19,26,.3);
+}
+/* list */
+.card{
+  background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius-card);
+  padding:16px; margin-bottom:12px; display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap;
+}
+.thumb{width:72px;height:72px;border-radius:14px;object-fit:cover;background:var(--canvas);flex-shrink:0;border:1px solid var(--hairline);}
+.thumb.ph{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--stone);}
+.card-main{flex:1;min-width:200px;}
+.card-main .nm{font-weight:700;font-size:15.5px;}
+.card-main .area{font-size:12.5px;color:var(--stone);margin-top:2px;}
+.dates{font-size:12.5px;color:var(--steel);margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.badge{padding:4px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:700;}
+.badge.pending{background:var(--crit-bg);color:var(--crit);}
+.badge.progress{background:var(--warn-bg);color:#8a5d00;}
+.badge.done{background:var(--success-bg);color:var(--success);}
+.badge.expiring{background:var(--crit);color:#fff;}
+.card-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;}
+.sel{
+  border:1px solid var(--hairline);background:var(--canvas);border-radius:var(--radius-sm);
+  padding:8px 10px;font-family:inherit;font-size:13px;color:var(--ink);
+}
+.del-btn{
+  background:none;border:1px solid var(--crit);color:var(--crit);border-radius:var(--radius-pill);
+  padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.empty{text-align:center;padding:50px 20px;color:var(--stone);}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(10,10,10,.5);display:none;align-items:flex-end;justify-content:center;z-index:50;}
+.overlay.show{display:flex;}
+.modal{
+  background:var(--surface); width:100%; max-width:520px; border-radius:24px 24px 0 0;
+  padding:22px 20px calc(24px + env(safe-area-inset-bottom,0px)); max-height:88vh; overflow-y:auto;
+}
+@media(min-width:640px){.overlay{align-items:center;} .modal{border-radius:24px;max-height:85vh;}}
+.modal h3{margin:0 0 16px;font-size:19px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--steel);margin-bottom:6px;}
+.field input,.field textarea{
+  width:100%;border:1px solid var(--hairline);border-radius:var(--radius-sm);padding:11px 12px;
+  font-family:inherit;font-size:14px;background:var(--canvas);color:var(--ink);
+}
+.field textarea{resize:vertical;min-height:60px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.imgpick{
+  border:1.5px dashed var(--hairline);border-radius:14px;padding:14px;text-align:center;
+  cursor:pointer;color:var(--steel);font-size:13px;position:relative;
+}
+.imgpick img{max-height:110px;border-radius:10px;margin-top:8px;}
+.modal-actions{display:flex;gap:10px;margin-top:18px;}
+.btn-ghost{flex:1;background:none;border:1px solid var(--hairline);color:var(--steel);padding:12px;border-radius:var(--radius-pill);font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;}
+.btn-submit{flex:2;background:var(--primary);border:none;color:#fff;padding:12px;border-radius:var(--radius-pill);font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;}
+.btn-submit:disabled{opacity:.6;}
+.pass-wrap{position:fixed;inset:0;background:rgba(10,10,10,.5);display:none;align-items:center;justify-content:center;z-index:60;padding:16px;}
+.pass-wrap.show{display:flex;}
+.pass-box{background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:320px;text-align:center;}
+.pass-box input{width:100%;text-align:center;letter-spacing:4px;font-size:18px;padding:12px;border-radius:12px;border:1px solid var(--hairline);margin:14px 0;background:var(--canvas);color:var(--ink);}
+.hint{font-size:12px;color:var(--stone);margin-top:16px;}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr);} .row2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="brand">
+      <div class="brand-badge">🏷️</div>
+      <div class="brand-text">
+        <p class="disp">ป้ายราคาโปรโมชั่น</p>
+        <div class="sub">ติดตามวันเริ่ม–วันจบโปรโมชั่น &amp; แจ้งเตือนเก็บป้าย</div>
+      </div>
+    </div>
+    <button class="role-btn" id="roleBtn" style="display:none;"><span id="whoIcon">👤</span> <span id="whoami"></span> · ออก</button>
+  </div>
+</div>
+
+<div id="appMain" style="display:none;">
+<div class="alert" id="alertBox" style="display:none;">
+  <div class="ic">⚠️</div>
+  <div>
+    <b id="alertTitle"></b>
+    <p>กรุณาตรวจสอบรายการด้านล่างและเก็บป้ายราคาออกจากระบบ</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat total"><div class="bar"></div><div class="body"><div class="num" id="stTotal">0</div><div class="lbl">รายการทั้งหมด</div></div></div>
+    <div class="stat pending"><div class="bar"></div><div class="body"><div class="num" id="stPending">0</div><div class="lbl">ยังไม่ดำเนินการ</div></div></div>
+    <div class="stat progress"><div class="bar"></div><div class="body"><div class="num" id="stProgress">0</div><div class="lbl">กำลังดำเนินการ</div></div></div>
+    <div class="stat done"><div class="bar"></div><div class="body"><div class="num" id="stDone">0</div><div class="lbl">เก็บป้ายแล้ว</div></div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters" id="filters">
+      <button class="chip active" data-f="all">ทั้งหมด</button>
+      <button class="chip" data-f="today">หมดอายุวันนี้</button>
+      <button class="chip" data-f="pending">ยังไม่ดำเนินการ</button>
+      <button class="chip" data-f="progress">กำลังดำเนินการ</button>
+      <button class="chip" data-f="done">เก็บป้ายแล้ว</button>
+    </div>
+    <button class="btn-primary" id="addBtn" style="display:none;">＋ เพิ่มรายการโปรโมชั่น</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>เพิ่มรายการโปรโมชั่น</h3>
+    <div class="field"><label>ชื่อสินค้า / รายการ</label><input id="fName" placeholder="เช่น ขนมปัง Gold Container 24h"></div>
+    <div class="field"><label>สาขา / พื้นที่ (ถ้ามี)</label><input id="fArea" placeholder="เช่น Store 011 พิษณุโลก"></div>
+    <div class="row2">
+      <div class="field"><label>วันเริ่มโปรโมชั่น</label><input type="date" id="fStart"></div>
+      <div class="field"><label>วันสิ้นสุดโปรโมชั่น</label><input type="date" id="fEnd"></div>
+    </div>
+    <div class="field">
+      <label>ภาพช่วงโปรโมชั่น (ถ้ามี)</label>
+      <div class="imgpick" id="imgPick">📷 แตะเพื่อแนบภาพ<div id="imgPreviewWrap"></div></div>
+      <input type="file" id="fImg" accept="image/*" style="display:none;">
+    </div>
+    <div class="field"><label>หมายเหตุ (ถ้ามี)</label><textarea id="fNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
+      <button class="btn-submit" id="submitBtn">บันทึกรายการ</button>
+    </div>
+  </div>
+</div>
+
+<div class="pass-wrap show" id="loginWrap">
+  <div class="pass-box">
+    <div style="font-size:28px;">🏷️</div>
+    <h3 style="margin:10px 0 0;">เข้าสู่ระบบ</h3>
+    <input id="loginUser" placeholder="ชื่อผู้ใช้" style="margin-bottom:0;">
+    <input type="password" id="loginPass" placeholder="รหัสผ่าน">
+    <div style="display:flex;gap:8px;">
+      <button class="btn-submit" id="loginOk" style="flex:1;">เข้าสู่ระบบ</button>
+    </div>
+    <div class="hint" id="loginErr" style="color:var(--crit);"></div>
+  </div>
+</div>
+
+<script>
+// ---- Firebase setup ----
+const firebaseConfig = {
+  apiKey: "AIzaSyCu38597DvsnEvZB4oO3bjTk3bNWfRlTC0",
+  authDomain: "promotion-5e0cc.firebaseapp.com",
+  databaseURL: "https://promotion-5e0cc-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "promotion-5e0cc",
+  storageBucket: "promotion-5e0cc.firebasestorage.app",
+  messagingSenderId: "685455607449",
+  appId: "1:685455607449:web:73df976de91279cd8d5a08"
+};
+firebase.initializeApp(firebaseConfig);
+const rtdb = firebase.database();
+const promosRef = rtdb.ref('promos');
+
+let adminMode=false, currentFilter='all', promos=[], pickedFile=null;
+const $=s=>document.querySelector(s);
+const todayStr=()=>new Date().toISOString().slice(0,10);
+
+promosRef.on('value', snap=>{
+  const val = snap.val() || {};
+  promos = Object.keys(val).map(id=>({id, ...val[id]})).sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||''));
+  render();
+}, err=>console.error('Firebase read error:', err));
+
+function compressImage(file, maxW=900, quality=0.72){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const reader=new FileReader();
+    reader.onload=e=>{ img.onload=()=>{
+      const scale=Math.min(1, maxW/img.width);
+      const c=document.createElement('canvas');
+      c.width=img.width*scale; c.height=img.height*scale;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      resolve(c.toDataURL('image/jpeg', quality));
+    }; img.onerror=reject; img.src=e.target.result; };
+    reader.onerror=reject; reader.readAsDataURL(file);
+  });
+}
+
+function daysLeftLabel(end){
+  const t=todayStr();
+  if(end<t) return {txt:'เลยกำหนด', cls:'expiring'};
+  if(end===t) return {txt:'หมดอายุวันนี้', cls:'expiring'};
+  const diff=Math.round((new Date(end)-new Date(t))/86400000);
+  return {txt:'เหลือ '+diff+' วัน', cls:''};
+}
+function statusInfo(s){
+  if(s==='done') return {txt:'เก็บป้ายแล้ว', cls:'done'};
+  if(s==='progress') return {txt:'กำลังดำเนินการ', cls:'progress'};
+  return {txt:'ยังไม่ดำเนินการ', cls:'pending'};
+}
+
+function render(){
+  const t=todayStr();
+  const expiringToday = promos.filter(p=>p.status!=='done' && p.endDate<=t);
+  const alertBox=$('#alertBox');
+  if(expiringToday.length>0){
+    alertBox.style.display='flex';
+    $('#alertTitle').textContent = `มีรายการหมดโปรโมชั่นวันนี้/ค้างอยู่ ${expiringToday.length} รายการ`;
+  } else alertBox.style.display='none';
+
+  $('#stTotal').textContent=promos.length;
+  $('#stPending').textContent=promos.filter(p=>p.status!=='done'&&p.status!=='progress').length;
+  $('#stProgress').textContent=promos.filter(p=>p.status==='progress').length;
+  $('#stDone').textContent=promos.filter(p=>p.status==='done').length;
+
+  let list=promos;
+  if(currentFilter==='today') list=promos.filter(p=>p.status!=='done'&&p.endDate<=t);
+  else if(currentFilter==='pending') list=promos.filter(p=>(p.status||'pending')==='pending');
+  else if(currentFilter==='progress') list=promos.filter(p=>p.status==='progress');
+  else if(currentFilter==='done') list=promos.filter(p=>p.status==='done');
+
+  const el=$('#list');
+  if(list.length===0){ el.innerHTML='<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'; return; }
+  el.innerHTML = list.map(p=>{
+    const dl=daysLeftLabel(p.endDate);
+    const st=statusInfo(p.status||'pending');
+    const img = p.image ? `<img class="thumb" src="${p.image}">` : `<div class="thumb ph">🏷️</div>`;
+    return `<div class="card" data-id="${p.id}">
+      ${img}
+      <div class="card-main">
+        <div class="nm">${esc(p.name||'ไม่ระบุชื่อ')}</div>
+        ${p.area?`<div class="area">📍 ${esc(p.area)}</div>`:''}
+        <div class="dates">
+          <span>${p.startDate||'-'} → ${p.endDate||'-'}</span>
+          <span class="badge ${dl.cls||st.cls}">${dl.txt}</span>
+          <span class="badge ${st.cls}">${st.txt}</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <select class="sel" data-act="status" ${p.status==='done'&&!adminMode?'':''}>
+          <option value="pending" ${(!p.status||p.status==='pending')?'selected':''}>ยังไม่ดำเนินการ</option>
+          <option value="progress" ${p.status==='progress'?'selected':''}>กำลังดำเนินการ</option>
+          <option value="done" ${p.status==='done'?'selected':''}>เก็บป้ายแล้ว</option>
+        </select>
+        ${adminMode?'<button class="del-btn" data-act="del">ลบ</button>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+$('#list').addEventListener('change', async e=>{
+  if(e.target.dataset.act==='status'){
+    const id=e.target.closest('.card').dataset.id;
+    try{ await promosRef.child(id).update({status:e.target.value, updatedAt:Date.now()}); }catch(err){ alert('อัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
+  }
+});
+$('#list').addEventListener('click', async e=>{
+  if(e.target.dataset.act==='del'){
+    const id=e.target.closest('.card').dataset.id;
+    if(confirm('ยืนยันการลบรายการนี้ออกจากระบบ?')){
+      try{ await promosRef.child(id).remove(); }catch(err){ alert('ลบไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
+    }
+  }
+});
+
+document.querySelectorAll('#filters .chip').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('#filters .chip').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); currentFilter=c.dataset.f; render();
+}));
+
+$('#addBtn').addEventListener('click',()=>{ $('#overlay').classList.add('show'); });
+$('#cancelBtn').addEventListener('click', closeModal);
+function closeModal(){
+  $('#overlay').classList.remove('show');
+  $('#fName').value=''; $('#fArea').value=''; $('#fStart').value=''; $('#fEnd').value=''; $('#fNote').value='';
+  pickedFile=null; pickedPreview=null; $('#imgPreviewWrap').innerHTML='';
+}
+$('#imgPick').addEventListener('click',()=>$('#fImg').click());
+$('#fImg').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return; pickedFile=f;
+  const url=URL.createObjectURL(f);
+  $('#imgPreviewWrap').innerHTML=`<img src="${url}">`;
+});
+$('#submitBtn').addEventListener('click', async ()=>{
+  const name=$('#fName').value.trim(), start=$('#fStart').value, end=$('#fEnd').value;
+  if(!name||!start||!end){ alert('กรุณากรอกชื่อรายการ วันเริ่ม และวันสิ้นสุด'); return; }
+  $('#submitBtn').disabled=true; $('#submitBtn').textContent='กำลังบันทึก...';
+  try{
+    let image=null;
+    if(pickedFile){ image = await compressImage(pickedFile); }
+    await promosRef.push({
+      name, area:$('#fArea').value.trim(), startDate:start, endDate:end,
+      note:$('#fNote').value.trim(), image, status:'pending', createdAt:Date.now(), updatedAt:Date.now()
+    });
+    closeModal();
+  }catch(err){ console.error(err); alert('บันทึกไม่สำเร็จ กรุณาลองใหม่ (ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและ Firebase Rules)'); }
+  $('#submitBtn').disabled=false; $('#submitBtn').textContent='บันทึกรายการ';
+});
+
+// ---- Login (fixed accounts) ----
+const USERS = {
+  'st11':    { pass:'st11',    role:'user',  label:'พนักงาน (st11)' },
+  'admin11': { pass:'admin11', role:'admin', label:'ผู้ดูแลระบบ (admin11)' }
+};
+let currentUser=null;
+
+function applySession(username){
+  const u=USERS[username];
+  currentUser=username; adminMode = u.role==='admin';
+  $('#whoami').textContent = u.label;
+  $('#whoIcon').textContent = adminMode ? '🛠️' : '👤';
+  $('#roleBtn').style.display='flex';
+  $('#roleBtn').classList.toggle('admin', adminMode);
+  $('#addBtn').style.display = adminMode ? 'flex' : 'none';
+  $('#appMain').style.display='block';
+  $('#loginWrap').classList.remove('show');
+  render();
+}
+function tryLogin(){
+  const uname=$('#loginUser').value.trim(), pw=$('#loginPass').value;
+  const u=USERS[uname];
+  if(u && u.pass===pw){
+    sessionStorage.setItem('ptt_user', uname);
+    $('#loginErr').textContent='';
+    applySession(uname);
+  } else {
+    $('#loginErr').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+  }
+}
+$('#loginOk').addEventListener('click', tryLogin);
+$('#loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+$('#loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#loginPass').focus(); });
+$('#roleBtn').addEventListener('click',()=>{
+  if(confirm('ออกจากระบบ?')){
+    sessionStorage.removeItem('ptt_user');
+    currentUser=null; adminMode=false;
+    $('#appMain').style.display='none'; $('#roleBtn').style.display='none';
+    $('#loginWrap').classList.add('show');
+    $('#loginUser').value=''; $('#loginPass').value='';
+  }
+});
+(function autoLogin(){
+  const saved=sessionStorage.getItem('ptt_user');
+  if(saved && USERS[saved]) applySession(saved);
+})();
+</script>
+</body>
+</html>

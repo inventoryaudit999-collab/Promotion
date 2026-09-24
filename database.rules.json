@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "promos": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
