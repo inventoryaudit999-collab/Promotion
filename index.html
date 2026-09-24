@@ -289,6 +289,12 @@ function fmtDate(d){
   const [y,m,day]=parts;
   return `${day}-${m}-${y}`;
 }
+function fmtDateTime(ts){
+  if(!ts) return '-';
+  const d=new Date(ts);
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())} น.`;
+}
 function daysLeftLabel(end){
   const t=todayStr();
   if(end<t) return {txt:'เลยกำหนด', cls:'expiring'};
@@ -338,6 +344,7 @@ function render(){
           <span class="badge ${dl.cls||st.cls}">${dl.txt}</span>
           <span class="badge ${st.cls}">${st.txt}</span>
         </div>
+        ${p.updatedBy?`<div class="area" style="margin-top:5px;">📝 แก้ไขล่าสุดโดย <b style="color:var(--ink);">${esc(p.updatedBy)}</b> · ${fmtDateTime(p.updatedAt)}</div>`:''}
       </div>
       <div class="card-actions">
         <select class="sel" data-act="status" ${p.status==='done'&&!adminMode?'':''}>
@@ -355,7 +362,11 @@ function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 $('#list').addEventListener('change', async e=>{
   if(e.target.dataset.act==='status'){
     const id=e.target.closest('.card').dataset.id;
-    try{ await promosRef.child(id).update({status:e.target.value, updatedAt:Date.now()}); }catch(err){ alert('อัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
+    const newStatus=e.target.value;
+    try{
+      await promosRef.child(id).update({status:newStatus, updatedAt:Date.now(), updatedBy:currentUser});
+      await promosRef.child(id).child('history').push({status:newStatus, by:currentUser, at:Date.now()});
+    }catch(err){ alert('อัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
   }
 });
 $('#list').addEventListener('click', async e=>{
