@@ -282,6 +282,13 @@ function compressImage(file, maxW=900, quality=0.72){
   });
 }
 
+function fmtDate(d){
+  if(!d) return '-';
+  const parts=d.split('-');
+  if(parts.length!==3) return d;
+  const [y,m,day]=parts;
+  return `${day}-${m}-${y}`;
+}
 function daysLeftLabel(end){
   const t=todayStr();
   if(end<t) return {txt:'เลยกำหนด', cls:'expiring'};
@@ -327,7 +334,7 @@ function render(){
         <div class="nm">${esc(p.name||'ไม่ระบุชื่อ')}</div>
         ${p.area?`<div class="area">📍 ${esc(p.area)}</div>`:''}
         <div class="dates">
-          <span>${p.startDate||'-'} → ${p.endDate||'-'}</span>
+          <span>${fmtDate(p.startDate)} → ${fmtDate(p.endDate)}</span>
           <span class="badge ${dl.cls||st.cls}">${dl.txt}</span>
           <span class="badge ${st.cls}">${st.txt}</span>
         </div>
