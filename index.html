@@ -481,7 +481,7 @@ function applySession(username){
   $('#whoIcon').textContent = adminMode ? '🛠️' : '👤';
   $('#roleBtn').style.display='flex';
   $('#roleBtn').classList.toggle('admin', adminMode);
-  $('#addBtn').style.display = adminMode ? 'flex' : 'none';
+  $('#addBtn').style.display = 'flex'; // ทั้ง user และ admin เพิ่มรายการได้
   $('#appMain').style.display='block';
   $('#loginWrap').classList.remove('show');
   render();
