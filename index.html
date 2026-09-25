@@ -121,11 +121,31 @@ h1,h2,h3,.disp{font-family:'Prompt','Noto Sans Thai',sans-serif;}
 .badge.progress{background:var(--warn-bg);color:#8a5d00;}
 .badge.done{background:var(--success-bg);color:var(--success);}
 .badge.expiring{background:var(--crit);color:#fff;}
-.card-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;}
-.sel{
-  border:1px solid var(--hairline);background:var(--canvas);border-radius:var(--radius-sm);
-  padding:8px 10px;font-family:inherit;font-size:13px;color:var(--ink);
+.badge.daysoon{background:var(--warn-bg);color:#8a5d00;border:1px solid var(--warn);}
+.badge.dayok{background:var(--success-bg);color:var(--success);border:1px solid var(--success);}
+.card-actions{flex:1 1 100%;margin-top:6px;}
+.dept-grid{display:grid;grid-template-columns:repeat(3,1fr) 1.25fr;gap:8px;align-items:end;}
+.dept-col{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.dept-lbl{font-size:13.5px;font-weight:800;color:var(--stone);text-align:center;letter-spacing:.4px;text-transform:uppercase;}
+.dept-col.all .dept-lbl{color:var(--ink);}
+.dept-sel{
+  appearance:none;-webkit-appearance:none;
+  border:1.5px solid var(--hairline);background:var(--canvas);border-radius:var(--radius-sm);
+  padding:8px 4px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink);text-align:center;width:100%;cursor:pointer;
 }
+.dept-sel.st-pending{border-color:var(--crit);color:var(--crit);background:var(--crit-bg);}
+.dept-sel.st-progress{border-color:var(--warn);color:#8a5d00;background:var(--warn-bg);}
+.dept-sel.st-done{border-color:var(--success);color:var(--success);background:var(--success-bg);}
+.dept-sel:disabled{opacity:.6;cursor:not-allowed;}
+.all-badge{
+  border-radius:var(--radius-sm);padding:8px 4px;font-size:11.5px;font-weight:700;text-align:center;width:100%;
+  border:1.5px solid transparent;line-height:1.25;
+}
+.all-badge.st-pending{background:var(--crit-bg);color:var(--crit);border-color:var(--crit);}
+.all-badge.st-progress{background:var(--warn-bg);color:#8a5d00;border-color:var(--warn);}
+.all-badge.st-done{background:var(--success-bg);color:var(--success);border-color:var(--success);}
+.card-foot{display:flex;justify-content:flex-end;margin-top:10px;}
+@media(max-width:560px){.dept-grid{grid-template-columns:repeat(2,1fr);}}
 .del-btn{
   background:none;border:1px solid var(--crit);color:var(--crit);border-radius:var(--radius-pill);
   padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
@@ -305,17 +325,28 @@ function daysLeftLabel(end){
   if(end<t) return {txt:'เลยกำหนด', cls:'expiring'};
   if(end===t) return {txt:'หมดอายุวันนี้', cls:'expiring'};
   const diff=Math.round((new Date(end)-new Date(t))/86400000);
-  return {txt:'เหลือ '+diff+' วัน', cls:''};
+  const cls = diff<=2 ? 'daysoon' : 'dayok'; // <=2 days left: orange, >2 days left: green
+  return {txt:'เหลือ '+diff+' วัน', cls};
 }
 function statusInfo(s){
   if(s==='done') return {txt:'เก็บป้ายแล้ว', cls:'done'};
   if(s==='progress') return {txt:'กำลังดำเนินการ', cls:'progress'};
   return {txt:'ยังไม่ดำเนินการ', cls:'pending'};
 }
+// ---- Department statuses (FF / DF / NF) & auto-computed ALL status ----
+// Older records only have a single `status` field — treat it as every
+// department's starting value so existing items don't jump back to "pending".
+function deptStatus(p, key){ return p[key] || p.status || 'pending'; }
+function computeAllStatus(p){
+  const ff=deptStatus(p,'statusFF'), df=deptStatus(p,'statusDF'), nf=deptStatus(p,'statusNF');
+  if(ff==='done' && df==='done' && nf==='done') return 'done';
+  if(ff==='pending' && df==='pending' && nf==='pending') return 'pending';
+  return 'progress';
+}
 
 function render(){
   const t=todayStr();
-  const expiringToday = promos.filter(p=>p.status!=='done' && p.endDate<=t);
+  const expiringToday = promos.filter(p=>computeAllStatus(p)!=='done' && p.endDate<=t);
   updateBadge(expiringToday.length);
   const alertBox=$('#alertBox');
   if(expiringToday.length>0){
@@ -324,22 +355,34 @@ function render(){
   } else alertBox.style.display='none';
 
   $('#stTotal').textContent=promos.length;
-  $('#stPending').textContent=promos.filter(p=>p.status!=='done'&&p.status!=='progress').length;
-  $('#stProgress').textContent=promos.filter(p=>p.status==='progress').length;
-  $('#stDone').textContent=promos.filter(p=>p.status==='done').length;
+  $('#stPending').textContent=promos.filter(p=>computeAllStatus(p)==='pending').length;
+  $('#stProgress').textContent=promos.filter(p=>computeAllStatus(p)==='progress').length;
+  $('#stDone').textContent=promos.filter(p=>computeAllStatus(p)==='done').length;
 
   let list=promos;
-  if(currentFilter==='today') list=promos.filter(p=>p.status!=='done'&&p.endDate<=t);
-  else if(currentFilter==='pending') list=promos.filter(p=>(p.status||'pending')==='pending');
-  else if(currentFilter==='progress') list=promos.filter(p=>p.status==='progress');
-  else if(currentFilter==='done') list=promos.filter(p=>p.status==='done');
+  if(currentFilter==='today') list=promos.filter(p=>computeAllStatus(p)!=='done'&&p.endDate<=t);
+  else if(currentFilter==='pending') list=promos.filter(p=>computeAllStatus(p)==='pending');
+  else if(currentFilter==='progress') list=promos.filter(p=>computeAllStatus(p)==='progress');
+  else if(currentFilter==='done') list=promos.filter(p=>computeAllStatus(p)==='done');
 
   const el=$('#list');
   if(list.length===0){ el.innerHTML='<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'; return; }
   el.innerHTML = list.map(p=>{
     const dl=daysLeftLabel(p.endDate);
-    const st=statusInfo(p.status||'pending');
+    const allSt=computeAllStatus(p);
+    const st=statusInfo(allSt);
     const img = p.image ? `<img class="card-img" src="${p.image}">` : `<div class="card-img ph">🏷️</div>`;
+    const deptSelect=(key,label)=>{
+      const v=deptStatus(p,key);
+      return `<div class="dept-col">
+        <div class="dept-lbl">${label}</div>
+        <select class="dept-sel st-${v}" data-act="${key}">
+          <option value="pending" ${v==='pending'?'selected':''}>ยังไม่ดำเนินการ</option>
+          <option value="progress" ${v==='progress'?'selected':''}>กำลังดำเนินการ</option>
+          <option value="done" ${v==='done'?'selected':''}>เก็บป้ายแล้ว</option>
+        </select>
+      </div>`;
+    };
     return `<div class="card" data-id="${p.id}">
       ${img}
       <div class="card-body">
@@ -354,13 +397,17 @@ function render(){
           ${p.updatedBy?`<div class="area" style="margin-top:5px;">📝 แก้ไขล่าสุดโดย <b style="color:var(--ink);">${esc(p.updatedBy)}</b> · ${fmtDateTime(p.updatedAt)}</div>`:''}
         </div>
         <div class="card-actions">
-          <select class="sel" data-act="status" ${p.status==='done'&&!adminMode?'':''}>
-            <option value="pending" ${(!p.status||p.status==='pending')?'selected':''}>ยังไม่ดำเนินการ</option>
-            <option value="progress" ${p.status==='progress'?'selected':''}>กำลังดำเนินการ</option>
-            <option value="done" ${p.status==='done'?'selected':''}>เก็บป้ายแล้ว</option>
-          </select>
-          ${adminMode?'<button class="del-btn" data-act="del">ลบ</button>':''}
+          <div class="dept-grid">
+            ${deptSelect('statusFF','FF')}
+            ${deptSelect('statusDF','DF')}
+            ${deptSelect('statusNF','NF')}
+            <div class="dept-col all">
+              <div class="dept-lbl">ALL</div>
+              <div class="all-badge st-${allSt}">${st.txt}</div>
+            </div>
+          </div>
         </div>
+        ${adminMode?`<div class="card-foot"><button class="del-btn" data-act="del">ลบ</button></div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -414,15 +461,30 @@ if('serviceWorker' in navigator){
   });
 }
 
+const DEPT_KEYS=['statusFF','statusDF','statusNF'];
 $('#list').addEventListener('change', async e=>{
-  if(e.target.dataset.act==='status'){
-    const id=e.target.closest('.card').dataset.id;
-    const newStatus=e.target.value;
-    try{
-      await promosRef.child(id).update({status:newStatus, updatedAt:Date.now(), updatedBy:currentUser});
-      await promosRef.child(id).child('history').push({status:newStatus, by:currentUser, at:Date.now()});
-    }catch(err){ alert('อัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
-  }
+  const act=e.target.dataset.act;
+  if(!DEPT_KEYS.includes(act)) return;
+  const id=e.target.closest('.card').dataset.id;
+  const p=promos.find(x=>x.id===id);
+  if(!p) return;
+  const newVal=e.target.value;
+  const next={
+    statusFF: act==='statusFF'?newVal:deptStatus(p,'statusFF'),
+    statusDF: act==='statusDF'?newVal:deptStatus(p,'statusDF'),
+    statusNF: act==='statusNF'?newVal:deptStatus(p,'statusNF')
+  };
+  const aggregate=computeAllStatus(next);
+  try{
+    await promosRef.child(id).update({
+      ...next,
+      status:aggregate, // kept in sync for backward compatibility (e.g. the daily email check)
+      updatedAt:Date.now(), updatedBy:currentUser
+    });
+    await promosRef.child(id).child('history').push({
+      dept:act.replace('status',''), status:newVal, allStatus:aggregate, by:currentUser, at:Date.now()
+    });
+  }catch(err){ alert('อัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อ'); }
 });
 $('#list').addEventListener('click', async e=>{
   if(e.target.dataset.act==='del'){
@@ -460,7 +522,9 @@ $('#submitBtn').addEventListener('click', async ()=>{
     if(pickedFile){ image = await compressImage(pickedFile); }
     await promosRef.push({
       name, area:$('#fArea').value.trim(), startDate:start, endDate:end,
-      note:$('#fNote').value.trim(), image, status:'pending', createdAt:Date.now(), updatedAt:Date.now()
+      note:$('#fNote').value.trim(), image,
+      status:'pending', statusFF:'pending', statusDF:'pending', statusNF:'pending',
+      createdAt:Date.now(), updatedAt:Date.now()
     });
     closeModal();
   }catch(err){ console.error(err); alert('บันทึกไม่สำเร็จ กรุณาลองใหม่ (ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและ Firebase Rules)'); }
