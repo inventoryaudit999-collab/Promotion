@@ -286,9 +286,20 @@ let adminMode=false, currentFilter='all', promos=[], pickedFile=null;
 const $=s=>document.querySelector(s);
 const todayStr=()=>new Date().toISOString().slice(0,10);
 
+let rawPromos=[], currentUser=null, currentBranch=null;
+// Legacy records have no `branch` field — derive it from the 3-digit code in `area` (e.g. "011", "Store 011 พิษณุโลก").
+function branchOfPromo(p){
+  if(p.branch) return String(p.branch);
+  const m=String(p.area||'').match(/\d{3}/);
+  return m?m[0]:null;
+}
+function applyBranchFilter(){
+  promos = currentBranch ? rawPromos.filter(p=>branchOfPromo(p)===currentBranch) : [];
+}
 promosRef.on('value', snap=>{
   const val = snap.val() || {};
-  promos = Object.keys(val).map(id=>({id, ...val[id]})).sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||''));
+  rawPromos = Object.keys(val).map(id=>({id, ...val[id]})).sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||''));
+  applyBranchFilter();
   try{ render(); }catch(e){ console.error('render() failed:', e); }
 }, err=>console.error('Firebase read error:', err));
 
@@ -500,7 +511,10 @@ document.querySelectorAll('#filters .chip').forEach(c=>c.addEventListener('click
   c.classList.add('active'); currentFilter=c.dataset.f; render();
 }));
 
-$('#addBtn').addEventListener('click',()=>{ $('#overlay').classList.add('show'); });
+$('#addBtn').addEventListener('click',()=>{
+  $('#fArea').value=currentBranch||''; $('#fArea').readOnly=true;
+  $('#overlay').classList.add('show');
+});
 $('#cancelBtn').addEventListener('click', closeModal);
 function closeModal(){
   $('#overlay').classList.remove('show');
@@ -521,7 +535,7 @@ $('#submitBtn').addEventListener('click', async ()=>{
     let image=null;
     if(pickedFile){ image = await compressImage(pickedFile); }
     await promosRef.push({
-      name, area:$('#fArea').value.trim(), startDate:start, endDate:end,
+      name, area:currentBranch, branch:currentBranch, startDate:start, endDate:end,
       note:$('#fNote').value.trim(), image,
       status:'pending', statusFF:'pending', statusDF:'pending', statusNF:'pending',
       createdAt:Date.now(), updatedAt:Date.now()
@@ -532,15 +546,18 @@ $('#submitBtn').addEventListener('click', async ()=>{
 });
 
 // ---- Login (fixed accounts) ----
-const USERS = {
-  'st11':    { pass:'st11',    role:'user',  label:'พนักงาน (st11)' },
-  'admin11': { pass:'admin11', role:'admin', label:'ผู้ดูแลระบบ (admin11)' }
-};
-let currentUser=null;
+// Accounts: st01–st200 (user) and admin01–admin200 (admin). Password = username. Branch code = number padded to 3 digits (st11 → 011).
+const USERS = {};
+for(let i=1;i<=200;i++){
+  const n=String(i).padStart(2,'0'), branch=String(i).padStart(3,'0');
+  USERS['st'+n]    = { pass:'st'+n,    role:'user',  branch, label:`พนักงาน (st${n}) · สาขา ${branch}` };
+  USERS['admin'+n] = { pass:'admin'+n, role:'admin', branch, label:`ผู้ดูแลระบบ (admin${n}) · สาขา ${branch}` };
+}
 
 function applySession(username){
   const u=USERS[username];
-  currentUser=username; adminMode = u.role==='admin';
+  currentUser=username; currentBranch=u.branch; adminMode = u.role==='admin';
+  applyBranchFilter();
   $('#whoami').textContent = u.label;
   $('#whoIcon').textContent = adminMode ? '🛠️' : '👤';
   $('#roleBtn').style.display='flex';
@@ -567,7 +584,7 @@ $('#loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#loginPa
 $('#roleBtn').addEventListener('click',()=>{
   if(confirm('ออกจากระบบ?')){
     sessionStorage.removeItem('ptt_user');
-    currentUser=null; adminMode=false;
+    currentUser=null; currentBranch=null; adminMode=false; promos=[];
     $('#appMain').style.display='none'; $('#roleBtn').style.display='none';
     $('#loginWrap').classList.add('show');
     $('#loginUser').value=''; $('#loginPass').value='';
